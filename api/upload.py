@@ -11,7 +11,7 @@ app = Flask(__name__)
 # Configure Google Gemini API
 genai.configure(api_key='AIzaSyCymClOfe4v7yG-_fmFx0r_KKuKhB9TlXw')  # Replace with your actual API key
 
-UPLOAD_FOLDER = os.path.join(os.getcwd(), 'uploads')
+UPLOAD_FOLDER = '/tmp/uploads'  # Use /tmp for writable storage in Vercel
 if not os.path.exists(UPLOAD_FOLDER):
     os.makedirs(UPLOAD_FOLDER)
 
@@ -21,11 +21,15 @@ MCQ_CSV_PATH = os.path.join(UPLOAD_FOLDER, 'mcqs.csv')
 # Step 1: Extract Text from PDF
 def extract_text_from_pdf(pdf_path):
     text = ''
-    with open(pdf_path, 'rb') as file:
-        reader = PyPDF2.PdfReader(file)
-        for page in reader.pages:
-            text += page.extract_text() or ''  # Ensure no NoneType error
-    return text.strip()
+    try:
+        with open(pdf_path, 'rb') as file:
+            reader = PyPDF2.PdfReader(file)
+            for page in reader.pages:
+                text += page.extract_text() or ''  # Ensure no NoneType error
+        return text.strip()
+    except Exception as e:
+        print(f"Error extracting text from PDF: {e}")
+        return None
 
 # Step 2: Preprocess the Text
 def preprocess_text(text):
@@ -35,22 +39,9 @@ def preprocess_text(text):
 
 # Step 3: Generate MCQs using Google Gemini
 def generate_mcq(text, num_questions=5):
-    model = genai.GenerativeModel('gemini-1.5-flash')  # Ensure correct model version
-
-    prompt = f"""
-    Generate {num_questions} multiple-choice questions (MCQs) based on the following text:
-
-    {text}
-
-    Format each question as:
-    Q: [Question]
-    A: [Correct Answer]
-    B: [Option 1]
-    C: [Option 2]
-    D: [Option 3]
-    """
-
     try:
+        model = genai.GenerativeModel('gemini-1.5-flash')
+        prompt = f"Generate {num_questions} multiple-choice questions (MCQs) based on the following text:\n\n{text}\n\nFormat each question as:\nQ: [Question]\nA: [Correct Answer]\nB: [Option 1]\nC: [Option 2]\nD: [Option 3]"
         response = model.generate_content(prompt)
         return response.text.strip()
     except Exception as e:
@@ -92,52 +83,64 @@ def parse_mcq(mcq_text):
 
 # Step 5: Save MCQs to JSON
 def save_mcq_to_json(questions):
-    with open(MCQ_JSON_PATH, 'w') as f:
-        json.dump(questions, f, indent=4)
+    try:
+        with open(MCQ_JSON_PATH, 'w') as f:
+            json.dump(questions, f, indent=4)
+    except Exception as e:
+        print(f"Error saving MCQs to JSON: {e}")
 
 # Step 6: Save MCQs to CSV
 def save_mcq_to_csv(questions):
-    with open(MCQ_CSV_PATH, 'w', newline='') as f:
-        writer = csv.writer(f)
-        writer.writerow(["Question", "Option A (Correct)", "Option B", "Option C", "Option D"])
+    try:
+        with open(MCQ_CSV_PATH, 'w', newline='') as f:
+            writer = csv.writer(f)
+            writer.writerow(["Question", "Option A (Correct)", "Option B", "Option C", "Option D"])
 
-        for q in questions:
-            writer.writerow([q["question"], q["options"][0], q["options"][1], q["options"][2], q["options"][3]])
+            for q in questions:
+                writer.writerow([q["question"], q["options"][0], q["options"][1], q["options"][2], q["options"][3]])
+    except Exception as e:
+        print(f"Error saving MCQs to CSV: {e}")
 
 # Flask Routes
 @app.route('/upload', methods=['POST'])
 def upload():
-    if 'file' not in request.files:
-        return jsonify({"error": "No file uploaded"}), 400
+    try:
+        if 'file' not in request.files:
+            return jsonify({"error": "No file uploaded"}), 400
 
-    file = request.files['file']
-    if file.filename == '':
-        return jsonify({"error": "No file selected"}), 400
+        file = request.files['file']
+        if file.filename == '':
+            return jsonify({"error": "No file selected"}), 400
 
-    # Save the uploaded file
-    file_path = os.path.join(UPLOAD_FOLDER, file.filename)
-    file.save(file_path)
+        # Save the uploaded file
+        file_path = os.path.join(UPLOAD_FOLDER, file.filename)
+        file.save(file_path)
 
-    # Step 1: Extract text from PDF
-    text = extract_text_from_pdf(file_path)
+        # Step 1: Extract text from PDF
+        text = extract_text_from_pdf(file_path)
+        if not text:
+            return jsonify({"error": "Failed to extract text from PDF"}), 500
 
-    # Step 2: Preprocess the text
-    processed_text = preprocess_text(text)
+        # Step 2: Preprocess the text
+        processed_text = preprocess_text(text)
 
-    # Step 3: Generate MCQs
-    mcq_text = generate_mcq(processed_text, num_questions=5)
+        # Step 3: Generate MCQs
+        mcq_text = generate_mcq(processed_text, num_questions=5)
+        if not mcq_text:
+            return jsonify({"error": "Failed to generate MCQs"}), 500
 
-    if not mcq_text:
-        return jsonify({"error": "Failed to generate MCQs"}), 500
+        # Step 4: Parse MCQs into structured format
+        questions = parse_mcq(mcq_text)
 
-    # Step 4: Parse MCQs into structured format
-    questions = parse_mcq(mcq_text)
+        # Step 5: Save MCQs to JSON & CSV
+        save_mcq_to_json(questions)
+        save_mcq_to_csv(questions)
 
-    # Step 5: Save MCQs to JSON & CSV
-    save_mcq_to_json(questions)
-    save_mcq_to_csv(questions)
+        return jsonify(questions)
 
-    return jsonify(questions)
+    except Exception as e:
+        print(f"Error in upload route: {e}")
+        return jsonify({"error": str(e)}), 500
 
 if __name__ == '__main__':
     app.run(debug=True)
