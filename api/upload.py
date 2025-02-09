@@ -13,7 +13,7 @@ genai.configure(api_key='AIzaSyCwdWwRAXv75Qjc7baDaV4iR6D8F95HZi4')  # Replace wi
 
 # Define the upload and static folders
 UPLOAD_FOLDER = '/tmp/uploads'  # Use /tmp for writable storage in Vercel
-STATIC_FOLDER = os.path.join(os.getcwd(), 'static', 'mcqs')  # Publicly accessible folder for CSV files
+STATIC_FOLDER = '/tmp/static/mcqs'  # Use /tmp for static files
 
 # Ensure folders exist
 if not os.path.exists(UPLOAD_FOLDER):
@@ -22,7 +22,7 @@ if not os.path.exists(STATIC_FOLDER):
     os.makedirs(STATIC_FOLDER)
 
 MCQ_JSON_PATH = os.path.join(UPLOAD_FOLDER, 'mcq.json')
-MCQ_CSV_PATH = os.path.join(STATIC_FOLDER, 'mcqs.csv')  # Save CSV in the static folder
+MCQ_CSV_PATH = os.path.join(STATIC_FOLDER, 'mcqs.csv')  # Save CSV in the /tmp folder
 
 # Step 1: Extract Text from PDF
 def extract_text_from_pdf(pdf_path):
@@ -149,11 +149,13 @@ def upload():
         save_mcq_to_json(questions)
         save_mcq_to_csv(questions)
 
-        # Return the CSV file URL
-        csv_url = f"/static/mcqs/mcqs.csv"
+        # Return the CSV file content directly
+        with open(MCQ_CSV_PATH, 'r') as f:
+            csv_content = f.read()
+
         return jsonify({
             "questions": questions,
-            "csv_url": csv_url
+            "csv_content": csv_content
         })
 
     except Exception as e:
