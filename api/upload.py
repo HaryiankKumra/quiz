@@ -9,7 +9,7 @@ import csv
 app = Flask(__name__)
 
 # Configure Google Gemini API
-genai.configure(api_key='AIzaSyCymClOfe4v7yG-_fmFx0r_KKuKhB9TlXw')  # Replace with your actual API key
+genai.configure(api_key='AIzaSyCwdWwRAXv75Qjc7baDaV4iR6D8F95HZi4')  # Replace with your actual API key
 
 # Define the upload and static folders
 UPLOAD_FOLDER = '/tmp/uploads'  # Use /tmp for writable storage in Vercel
