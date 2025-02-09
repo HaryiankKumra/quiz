@@ -51,6 +51,17 @@
         .question li:hover {
             background: #d6d8db;
         }
+        .download-link {
+            margin-top: 20px;
+            display: none; /* Initially hidden */
+        }
+        .download-link a {
+            color: #007bff;
+            text-decoration: none;
+        }
+        .download-link a:hover {
+            text-decoration: underline;
+        }
     </style>
 </head>
 <body>
@@ -61,36 +72,66 @@
             <button type="submit">Upload PDF</button>
         </form>
         <div id="questionsContainer"></div>
+        <div id="downloadLink" class="download-link">
+            <a href="#" target="_blank">Download CSV</a>
+        </div>
     </div>
     <script>
         document.getElementById('uploadForm').addEventListener('submit', async (e) => {
             e.preventDefault();
+
             const formData = new FormData();
             const fileInput = document.getElementById('file');
             formData.append('file', fileInput.files[0]);
-            const response = await fetch('/upload', {
-                method: 'POST',
-                body: formData
-            });
-            const data = await response.json();
-            const questionsContainer = document.getElementById('questionsContainer');
-            questionsContainer.innerHTML = '';
-            if (response.ok) {
-                data.forEach((question, index) => {
-                    const questionDiv = document.createElement('div');
-                    questionDiv.className = 'question';
-                    questionDiv.innerHTML = `
-                        <h3>Question ${index + 1}: ${question.question}</h3>
-                        <ul>
-                            ${question.options.map(option => `<li onclick="checkAnswer(this, '${question.correct_answer}')">${option}</li>`).join('')}
-                        </ul>
-                    `;
-                    questionsContainer.appendChild(questionDiv);
+
+            try {
+                const response = await fetch('/upload', {
+                    method: 'POST',
+                    body: formData
                 });
-            } else {
-                questionsContainer.innerHTML = `<p style="color: red;">Error: ${data.error}</p>`;
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.error || 'Failed to upload file');
+                }
+
+                const data = await response.json();
+                const questionsContainer = document.getElementById('questionsContainer');
+                const downloadLinkDiv = document.getElementById('downloadLink');
+                const downloadLink = downloadLinkDiv.querySelector('a');
+
+                // Clear previous content
+                questionsContainer.innerHTML = '';
+                downloadLinkDiv.style.display = 'none';
+
+                if (data.questions && data.questions.length > 0) {
+                    // Display questions
+                    data.questions.forEach((question, index) => {
+                        const questionDiv = document.createElement('div');
+                        questionDiv.className = 'question';
+                        questionDiv.innerHTML = `
+                            <h3>Question ${index + 1}: ${question.question}</h3>
+                            <ul>
+                                ${question.options.map(option => `<li onclick="checkAnswer(this, '${question.correct_answer}')">${option}</li>`).join('')}
+                            </ul>
+                        `;
+                        questionsContainer.appendChild(questionDiv);
+                    });
+
+                    // Show the download link
+                    if (data.csv_url) {
+                        downloadLink.href = data.csv_url;
+                        downloadLinkDiv.style.display = 'block';
+                    }
+                } else {
+                    questionsContainer.innerHTML = `<p style="color: red;">No questions generated.</p>`;
+                }
+            } catch (error) {
+                const questionsContainer = document.getElementById('questionsContainer');
+                questionsContainer.innerHTML = `<p style="color: red;">Error: ${error.message}</p>`;
             }
         });
+
         function checkAnswer(element, correctAnswer) {
             if (element.innerText === correctAnswer) {
                 element.style.background = '#28a745';

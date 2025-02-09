@@ -11,12 +11,18 @@ app = Flask(__name__)
 # Configure Google Gemini API
 genai.configure(api_key='AIzaSyCymClOfe4v7yG-_fmFx0r_KKuKhB9TlXw')  # Replace with your actual API key
 
+# Define the upload and static folders
 UPLOAD_FOLDER = '/tmp/uploads'  # Use /tmp for writable storage in Vercel
+STATIC_FOLDER = os.path.join(os.getcwd(), 'static', 'mcqs')  # Publicly accessible folder for CSV files
+
+# Ensure folders exist
 if not os.path.exists(UPLOAD_FOLDER):
     os.makedirs(UPLOAD_FOLDER)
+if not os.path.exists(STATIC_FOLDER):
+    os.makedirs(STATIC_FOLDER)
 
 MCQ_JSON_PATH = os.path.join(UPLOAD_FOLDER, 'mcq.json')
-MCQ_CSV_PATH = os.path.join(UPLOAD_FOLDER, 'mcqs.csv')
+MCQ_CSV_PATH = os.path.join(STATIC_FOLDER, 'mcqs.csv')  # Save CSV in the static folder
 
 # Step 1: Extract Text from PDF
 def extract_text_from_pdf(pdf_path):
@@ -112,6 +118,13 @@ def upload():
         if file.filename == '':
             return jsonify({"error": "No file selected"}), 400
 
+        # Check file size (5 MB limit)
+        file.seek(0, os.SEEK_END)
+        file_size = file.tell()
+        file.seek(0)  # Reset file pointer
+        if file_size > 5 * 1024 * 1024:  # 5 MB
+            return jsonify({"error": "File size exceeds 5 MB limit"}), 413
+
         # Save the uploaded file
         file_path = os.path.join(UPLOAD_FOLDER, file.filename)
         file.save(file_path)
@@ -136,7 +149,12 @@ def upload():
         save_mcq_to_json(questions)
         save_mcq_to_csv(questions)
 
-        return jsonify(questions)
+        # Return the CSV file URL
+        csv_url = f"/static/mcqs/mcqs.csv"
+        return jsonify({
+            "questions": questions,
+            "csv_url": csv_url
+        })
 
     except Exception as e:
         print(f"Error in upload route: {e}")
